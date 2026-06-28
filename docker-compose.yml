@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Local headless browser for web automation
+  browser:
+    image: browserless/chrome:latest
+    container_name: hermes-browser
+    ports:
+      - "3000:3000"
+    environment:
+      - MAX_CONCURRENT_SESSIONS=10
+      - CONNECTION_TIMEOUT=300000
+      - MAX_QUEUE_LIMIT=100
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+  # Hermes agent container
+  hermes-agent:
+    image: node:20-slim
+    container_name: hermes-agent
+    working_dir: /app
+    volumes:
+      - /s/hermes:/app
+    environment:
+      - HERMES_HOME=/app/.hermes
+      - NODE_ENV=production
+    env_file:
+      - .env
+    command: ["node", "-e", "console.log('Hermes agent container running'); setInterval(() => {}, 1000)"]
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    driver: bridge

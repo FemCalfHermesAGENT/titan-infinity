@@ -1,0 +1,223 @@
+# Titan Infinity — Docker Infrastructure Stack
+# All services on Drive S, managed via Docker Compose
+
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════════════
+# NETWORKS
+# ═══════════════════════════════════════════════════════════════
+networks:
+  titan-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ═══════════════════════════════════════════════════════════════
+# VOLUMES (all on Drive S)
+# ═══════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\postgres\data
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\redis\data
+  elasticsearch_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\elasticsearch\data
+  rabbitmq_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\rabbitmq\data
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\prometheus\data
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\grafana\data
+  ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: S:\hermes\docker\ollama\models
+
+# ═══════════════════════════════════════════════════════════════
+# SERVICES
+# ═══════════════════════════════════════════════════════════════
+services:
+
+  # ─── POSTGRES (hermes-ops, developer, automation-engineer) ───
+  postgres:
+    image: postgres:16-alpine
+    container_name: titan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: titan
+      POSTGRES_PASSWORD: titan_secure_2026
+      POSTGRES_DB: titan_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - titan-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U titan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "titan.service=database"
+      - "titan.profile=hermes-ops"
+
+  # ─── REDIS (all profiles) ───
+  redis:
+    image: redis:7-alpine
+    container_name: titan-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass titan_redis_2026
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - titan-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "titan_redis_2026", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "titan.service=cache"
+      - "titan.profile=all"
+
+  # ─── RABBITMQ (automation-engineer, agenticops) ───
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: titan-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: titan
+      RABBITMQ_DEFAULT_PASS: titan_mq_2026
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - titan-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "titan.service=queue"
+      - "titan.profile=automation-engineer"
+
+  # ─── PROMETHEUS (hermes-ops monitoring) ───
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: titan-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - S:\hermes\docker\prometheus\prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - titan-net
+    labels:
+      - "titan.service=monitoring"
+      - "titan.profile=hermes-ops"
+
+  # ─── GRAFANA (hermes-ops monitoring) ───
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: titan-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: titan
+      GF_SECURITY_ADMIN_PASSWORD: titan_grafana_2026
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - titan-net
+    depends_on:
+      - prometheus
+    labels:
+      - "titan.service=monitoring"
+      - "titan.profile=hermes-ops"
+
+  # ─── OLLAMA (quantum-scientist, researcher, agenticops) ───
+  ollama:
+    image: ollama/ollama:latest
+    container_name: titan-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - titan-net
+    labels:
+      - "titan.service=llm"
+      - "titan.profile=quantum-scientist"
+
+  # ─── ELASTICSEARCH (researcher, hermes-ops) ───
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: titan-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - titan-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    labels:
+      - "titan.service=search"
+      - "titan.profile=researcher"
+
+  # ─── HERMES-AGENT (existing — Node.js for all profiles) ───
+  # Already running as 'hermes-agent'
+
+  # ─── HERMES-BROWSER (existing — Chrome for all profiles) ───
+  # Already running as 'hermes-browser'

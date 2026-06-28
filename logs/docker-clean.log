@@ -1,0 +1,7 @@
+[2026-06-27 12:15:02] Docker cleanup started
+[2026-06-27 12:15:02] Space before: 
+/mnt/s/hermes/cron/docker_cleanup.sh: line 14: docker: command not found
+/mnt/s/hermes/cron/docker_cleanup.sh: line 15: docker: command not found
+[2026-06-27 12:15:02] Space after: 
+[2026-06-27 12:15:02] Cleanup complete
+---
