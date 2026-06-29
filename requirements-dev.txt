@@ -1,0 +1,9 @@
+# Dependencies for titan_infinity
+# Core
+# (add your package-specific deps below)
+
+# Dev / CI
+pytest>=7.4
+pytest-cov>=4.1
+ruff>=0.5
+pre-commit>=3.7
