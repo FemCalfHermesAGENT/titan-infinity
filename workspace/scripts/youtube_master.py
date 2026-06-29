@@ -6,10 +6,10 @@ Process: Download → Transcribe → Analyze → Extract Actions → Upskill
 Output: Transcript + Analysis + Action Items + Self-Improvement Plan
 """
 
-import sys
-import os
 import json
+import os
 import subprocess
+import sys
 from datetime import datetime
 
 WORKSPACE = "/s/hermes/workspace"
@@ -18,17 +18,17 @@ REPOS_DIR = f"{WORKSPACE}/github-repos"
 
 def youtube_master(url):
     """Full pipeline: URL → Knowledge → Action"""
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = f"{SESSIONS_DIR}/{timestamp}"
     os.makedirs(session_dir, exist_ok=True)
-    
+
     print(f"\n{'='*60}")
-    print(f"  YOUTUBE MASTER PIPELINE")
+    print("  YOUTUBE MASTER PIPELINE")
     print(f"  URL: {url}")
     print(f"  Session: {session_dir}")
     print(f"{'='*60}\n")
-    
+
     # Step 1: Get video info
     print("[1/6] Getting video info...")
     result = subprocess.run(
@@ -38,20 +38,20 @@ def youtube_master(url):
     if result.returncode != 0:
         print(f"  ERROR: {result.stderr[:200]}")
         return
-    
+
     info = json.loads(result.stdout)
     title = info.get("title", "Unknown")
     duration = info.get("duration", 0)
     channel = info.get("channel", "Unknown")
-    
+
     print(f"  Title: {title}")
     print(f"  Channel: {channel}")
     print(f"  Duration: {duration//60}m {duration%60}s")
-    
+
     # Save metadata
     with open(f"{session_dir}/metadata.json", "w") as f:
         json.dump({"title": title, "channel": channel, "duration": duration, "url": url}, f, indent=2)
-    
+
     # Step 2: Download audio
     print("\n[2/6] Downloading audio...")
     subprocess.run(
@@ -59,15 +59,15 @@ def youtube_master(url):
         capture_output=True, timeout=300
     )
     print("  Audio downloaded")
-    
+
     # Step 3: Transcribe
     print("\n[3/6] Transcribing with Whisper...")
     result = subprocess.run(
-        ["whisper", f"{session_dir}/audio.mp3", "--model", "medium", 
+        ["whisper", f"{session_dir}/audio.mp3", "--model", "medium",
          "--output_format", "txt", "--output_dir", session_dir],
         capture_output=True, text=True, timeout=600
     )
-    
+
     transcript_file = f"{session_dir}/audio.txt"
     if os.path.exists(transcript_file):
         with open(transcript_file) as f:
@@ -76,11 +76,11 @@ def youtube_master(url):
     else:
         transcript = "TRANSCRIPTION FAILED"
         print("  Transcription failed")
-    
+
     # Step 4: Save transcript
     with open(f"{session_dir}/transcript.txt", "w") as f:
         f.write(transcript)
-    
+
     # Step 5: Create analysis prompt for Hermes
     analysis_prompt = f"""Analyze this YouTube video transcript and provide:
 
@@ -98,16 +98,16 @@ Duration: {duration//60}m {duration%60}s
 TRANSCRIPT:
 {transcript[:8000]}
 """
-    
+
     with open(f"{session_dir}/analysis_prompt.txt", "w") as f:
         f.write(analysis_prompt)
-    
-    print(f"\n[4/6] Analysis prompt saved")
-    print(f"\n[5/6] Next: Hermes will analyze and extract actions")
+
+    print("\n[4/6] Analysis prompt saved")
+    print("\n[5/6] Next: Hermes will analyze and extract actions")
     print(f"\n[6/6] Session ready at: {session_dir}")
     print(f"\n{'='*60}")
     print(f"  Ask Hermes to read: {session_dir}/analysis_prompt.txt")
-    print(f"  and execute the action items")
+    print("  and execute the action items")
     print(f"{'='*60}")
 
 if __name__ == "__main__":
